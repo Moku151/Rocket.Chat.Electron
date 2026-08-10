@@ -1,6 +1,11 @@
-import { Box, Badge, Chip } from '@rocket.chat/fuselage';
-import { useMemo } from 'react';
+import { Box, Badge, Chip, Button } from '@rocket.chat/fuselage';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import {
+  splitTextForHighlight,
+  splitMessageForCollapse,
+} from './textHighlight';
 import { type LogLevel, type LogEntryType } from './types';
 
 /**
@@ -74,12 +79,17 @@ export const LogEntry = ({
   showContext,
   showServer,
   serverMapping,
+  highlightQuery,
 }: {
   entry: LogEntryType;
   showContext: boolean;
   showServer: boolean;
   serverMapping: Record<string, string>;
+  highlightQuery?: string;
 }) => {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+
   const { serverTag, serverDisplayName, contextWithoutServer } = useMemo(() => {
     const tag = findServerTag(entry.context, serverMapping);
     const displayName = tag ? serverMapping[tag] || tag : '';
@@ -96,6 +106,19 @@ export const LogEntry = ({
       contextWithoutServer: ctxWithout,
     };
   }, [entry.context, serverMapping]);
+
+  const { visibleLines, hiddenLineCount } = useMemo(
+    () => splitMessageForCollapse(entry.message),
+    [entry.message]
+  );
+
+  const displayedMessage =
+    !expanded && hiddenLineCount > 0 ? visibleLines.join('\n') : entry.message;
+
+  const messageSegments = useMemo(
+    () => splitTextForHighlight(displayedMessage, highlightQuery || ''),
+    [displayedMessage, highlightQuery]
+  );
 
   return (
     <Box
@@ -142,7 +165,31 @@ export const LogEntry = ({
         color={getLevelTextColor(entry.level)}
         fontWeight='normal'
       >
-        {entry.message}
+        {messageSegments.map((segment, index) =>
+          segment.matched ? (
+            <Box
+              key={index}
+              is='mark'
+              backgroundColor='status-background-warning'
+              color='default'
+            >
+              {segment.text}
+            </Box>
+          ) : (
+            segment.text
+          )
+        )}
+        {hiddenLineCount > 0 && (
+          <Box marginBlockStart='x4'>
+            <Button small onClick={() => setExpanded((prev) => !prev)}>
+              {expanded
+                ? t('logViewer.buttons.showLess')
+                : t('logViewer.buttons.showMoreLines', {
+                    count: hiddenLineCount,
+                  })}
+            </Button>
+          </Box>
+        )}
       </Box>
     </Box>
   );

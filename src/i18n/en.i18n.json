@@ -170,6 +170,17 @@
       "detail": "This action cannot be undone. All current log entries will be permanently deleted.",
       "yes": "Clear",
       "cancel": "Cancel"
+    },
+    "selectLogFile": {
+      "title": "Select Log File",
+      "logFiles": "Log Files",
+      "allFiles": "All Files"
+    },
+    "saveLogFile": {
+      "title": "Save Log File",
+      "zipFiles": "ZIP Files",
+      "logFiles": "Log Files",
+      "allFiles": "All Files"
     }
   },
   "documentViewer": {
@@ -637,6 +648,7 @@
       "custom": "Custom",
       "entries": "{{count}} entries",
       "entriesOfTotal": "{{count}} of {{total}} entries",
+      "matches": "{{count}} matches",
       "noEntries": "No entries"
     },
     "buttons": {
@@ -649,7 +661,11 @@
       "save": "Save",
       "clear": "Clear",
       "close": "Close",
-      "clearFilters": "Clear Filters"
+      "clearFilters": "Clear Filters",
+      "retry": "Retry",
+      "showInFolder": "Show in Folder",
+      "showMoreLines": "Show {{count}} more lines",
+      "showLess": "Show less"
     },
     "controls": {
       "showContext": "Show Context",
@@ -673,11 +689,12 @@
       },
       "level": {
         "all": "All Levels",
-        "debug": "Debug",
-        "info": "Info",
-        "warn": "Warning",
-        "error": "Error",
-        "verbose": "Verbose"
+        "silly": "Silly and above",
+        "verbose": "Verbose and above",
+        "debug": "Debug and above",
+        "info": "Info and above",
+        "warn": "Warning and above",
+        "error": "Error"
       },
       "context": {
         "all": "All Contexts",
@@ -710,7 +727,13 @@
     },
     "messages": {
       "noLogsFound": "No logs found",
-      "adjustFilters": "Try adjusting your filters or refresh the logs"
+      "adjustFilters": "Try adjusting your filters or refresh the logs",
+      "loadFailed": "Failed to load logs",
+      "copiedToClipboard": "Logs copied to clipboard",
+      "savedSuccessfully": "Logs saved successfully",
+      "actionFailed": "Action failed",
+      "actionFailedWithDetail": "Action failed: {{detail}}",
+      "newEntriesPaused": "{{count}} new entries — click to resume"
     }
   },
   "serverInfo": {

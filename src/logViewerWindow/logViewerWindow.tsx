@@ -22,11 +22,14 @@ import { Virtuoso } from 'react-virtuoso';
 
 import { LogEntry } from './LogEntry';
 import {
+  ACTION_FEEDBACK_DISPLAY_MS,
   AUTO_REFRESH_INTERVAL_MS,
+  AUTO_SCROLL_GUARD_MS,
   SCROLL_DELAY_MS,
   SEARCH_DEBOUNCE_MS,
   VIRTUOSO_OVERSCAN,
 } from './constants';
+import { parseLogLines } from './parseLogs';
 import {
   type LogLevel,
   type LogEntryType,
@@ -35,11 +38,8 @@ import {
   type SaveLogsResponse,
   type SelectFileResponse,
   type ClearLogsResponse,
-  parseLogLevel,
+  isAtLeastLevel,
 } from './types';
-
-const LOG_LINE_REGEX = /^\[([^\]]+)\]\s+\[([^\]]+)\]\s*(.*)$/;
-const CONTEXT_REGEX = /^(\[[^\]]+\](?:\s*\[[^\]]+\])*)\s*(.*)$/;
 
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 B';
@@ -48,6 +48,22 @@ const formatFileSize = (bytes: number): string => {
   if (kb < 1024) return `${kb.toFixed(1)} KB`;
   const mb = kb / 1024;
   return `${mb.toFixed(1)} MB`;
+};
+
+const formatDateRange = (
+  oldestTime: number | null,
+  newestTime: number | null,
+  noEntriesLabel: string
+): string => {
+  if (oldestTime === null || newestTime === null) {
+    return noEntriesLabel;
+  }
+  const oldestDate = new Date(oldestTime);
+  const newestDate = new Date(newestTime);
+  if (oldestDate.toDateString() === newestDate.toDateString()) {
+    return `${oldestDate.toLocaleTimeString()} - ${newestDate.toLocaleTimeString()}`;
+  }
+  return `${oldestDate.toLocaleString()} - ${newestDate.toLocaleString()}`;
 };
 
 function LogViewerWindow() {
@@ -60,14 +76,26 @@ function LogViewerWindow() {
   const [logEntries, setLogEntries] = useState<LogEntryType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{
+    kind: 'copied' | 'saved' | 'error';
+    detail?: string;
+  } | null>(null);
+  const [pendingNewEntryCount, setPendingNewEntryCount] = useState(0);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const lastModifiedTimeRef = useRef<number | undefined>(undefined);
   const lastKnownSizeRef = useRef<number>(0);
+  const nextEntryIdRef = useRef<number>(0);
   const isAutoScrollingRef = useRef(false);
+  const lastAutoScrollAtRef = useRef<number>(0);
   const [autoScroll, setAutoScroll] = useState(true);
   const [userHasScrolled, setUserHasScrolled] = useState(false);
-  const [showContext, setShowContext] = useState(true);
-  const [showServer, setShowServer] = useState(true);
+  const isSuspendedRef = useRef(false);
+  const [showContext, setShowContext] = useLocalStorage(
+    'log-show-context',
+    true
+  );
+  const [showServer, setShowServer] = useLocalStorage('log-show-server', true);
   const [serverMapping, setServerMapping] = useState<Record<string, string>>(
     {}
   );
@@ -78,6 +106,8 @@ function LogViewerWindow() {
     lastModified: string;
     dateRange: string;
     lastModifiedTime?: number;
+    oldestTime: number | null;
+    newestTime: number | null;
   } | null>(null);
   const [currentLogFile, setCurrentLogFile] = useState<{
     filePath?: string;
@@ -99,8 +129,9 @@ function LogViewerWindow() {
     [t]
   );
 
-  const [entryLimit, setEntryLimit] =
-    useState<(typeof entryLimitOptions)[number][0]>('100');
+  const [entryLimit, setEntryLimit] = useLocalStorage<
+    (typeof entryLimitOptions)[number][0]
+  >('log-entry-limit', '100');
 
   const handleSearchFilterChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -112,11 +143,12 @@ function LogViewerWindow() {
   const levelFilterOptions = useMemo<[LogLevel | 'all', string][]>(
     () => [
       ['all', t('logViewer.filters.level.all')],
+      ['silly', t('logViewer.filters.level.silly')],
+      ['verbose', t('logViewer.filters.level.verbose')],
       ['debug', t('logViewer.filters.level.debug')],
       ['info', t('logViewer.filters.level.info')],
       ['warn', t('logViewer.filters.level.warn')],
       ['error', t('logViewer.filters.level.error')],
-      ['verbose', t('logViewer.filters.level.verbose')],
     ],
     [t]
   );
@@ -211,63 +243,26 @@ function LogViewerWindow() {
     setEntryLimit,
   ]);
 
-  const parseLogLines = useCallback((logText: string): LogEntryType[] => {
-    if (!logText || logText.trim() === '') {
-      return [];
-    }
-    const lines = logText.split(/\r?\n/).filter((line: string) => line.trim());
-    const entries: LogEntryType[] = [];
-    let currentEntry: LogEntryType | null = null;
-
-    lines.forEach((line, _index) => {
-      const match = line.match(LOG_LINE_REGEX);
-
-      if (match) {
-        const [, timestamp, level, rest] = match;
-
-        const contextMatch = rest.match(CONTEXT_REGEX);
-        const context = contextMatch?.[1] || '';
-        const message = contextMatch?.[2] || rest;
-
-        if (currentEntry) {
-          entries.push(currentEntry);
-        }
-
-        currentEntry = {
-          id: `log-${entries.length}`,
-          timestamp,
-          level: parseLogLevel(level),
-          context: context.replace(/[\[\]]/g, ' ').trim(),
-          message: message.trim(),
-          raw: line,
-        };
-      } else if (currentEntry && line.trim()) {
-        currentEntry.message += `\n${line}`;
-        currentEntry.raw += `\n${line}`;
-      }
-    });
-
-    if (currentEntry) {
-      entries.push(currentEntry);
-    }
-
-    return entries.reverse();
-  }, []);
-
   const loadLogs = useCallback(async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const response = (await ipcRenderer.invoke(
         'log-viewer-window/read-logs',
         {
-          limit: 'all',
+          limit: entryLimit === 'all' ? 'all' : parseInt(entryLimit),
           filePath: currentLogFile.isDefaultLog
             ? undefined
             : currentLogFile.filePath,
         }
       )) as ReadLogsResponse;
       if (response?.success && response.logs !== undefined) {
-        const parsedLogs = parseLogLines(response.logs);
+        nextEntryIdRef.current = 0;
+        const { entries: parsedLogs, nextId } = parseLogLines(
+          response.logs,
+          nextEntryIdRef.current
+        );
+        nextEntryIdRef.current = nextId;
         setLogEntries(parsedLogs);
 
         setCurrentLogFile({
@@ -276,30 +271,25 @@ function LogViewerWindow() {
           isDefaultLog: response.isDefaultLog ?? true,
         });
 
-        const logText = response.logs;
-        const sizeInBytes = new Blob([logText]).size;
-        const sizeFormatted = formatFileSize(sizeInBytes);
+        const sizeFormatted =
+          response.fileSize !== undefined
+            ? formatFileSize(response.fileSize)
+            : formatFileSize(0);
 
-        const timestamps = parsedLogs
-          .map((entry) => new Date(entry.timestamp))
-          .filter((date) => !isNaN(date.getTime()));
-        const oldestDate =
-          timestamps.length > 0
-            ? new Date(Math.min(...timestamps.map((d) => d.getTime())))
-            : null;
-        const newestDate =
-          timestamps.length > 0
-            ? new Date(Math.max(...timestamps.map((d) => d.getTime())))
-            : null;
+        let oldestTime: number | null = null;
+        let newestTime: number | null = null;
+        parsedLogs.forEach((entry) => {
+          const time = new Date(entry.timestamp).getTime();
+          if (isNaN(time)) return;
+          if (oldestTime === null || time < oldestTime) oldestTime = time;
+          if (newestTime === null || time > newestTime) newestTime = time;
+        });
 
-        let dateRange = t('logViewer.fileInfo.noEntries');
-        if (oldestDate && newestDate) {
-          if (oldestDate.toDateString() === newestDate.toDateString()) {
-            dateRange = `${oldestDate.toLocaleTimeString()} - ${newestDate.toLocaleTimeString()}`;
-          } else {
-            dateRange = `${oldestDate.toLocaleString()} - ${newestDate.toLocaleString()}`;
-          }
-        }
+        const dateRange = formatDateRange(
+          oldestTime,
+          newestTime,
+          t('logViewer.fileInfo.noEntries')
+        );
 
         if (response.fileSize !== undefined) {
           lastKnownSizeRef.current = response.fileSize;
@@ -312,67 +302,67 @@ function LogViewerWindow() {
           lastModified: new Date().toLocaleString(),
           dateRange,
           lastModifiedTime: response.lastModifiedTime,
+          oldestTime,
+          newestTime,
         });
       } else {
         console.error('Failed to load logs:', response?.error);
         setFileInfo(null);
+        setLogEntries([]);
+        setError(response?.error || t('logViewer.messages.loadFailed'));
       }
-    } catch (error) {
-      console.error('Failed to load logs:', error);
+    } catch (err) {
+      console.error('Failed to load logs:', err);
       setFileInfo(null);
+      setLogEntries([]);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }
-  }, [parseLogLines, currentLogFile.filePath, currentLogFile.isDefaultLog, t]);
+  }, [currentLogFile.filePath, currentLogFile.isDefaultLog, entryLimit, t]);
 
   const filteredLogs = useMemo(() => {
-    const filtered = logEntries.filter((entry) => {
+    const lowerSearchFilter = debouncedSearchFilter.toLowerCase();
+    const lowerContextFilter = contextFilter.toLowerCase();
+    const lowerServerFilter = serverFilter.toLowerCase();
+
+    return logEntries.filter((entry) => {
       const matchesSearch =
-        !debouncedSearchFilter ||
-        entry.message
-          .toLowerCase()
-          .includes(debouncedSearchFilter.toLowerCase()) ||
-        entry.context
-          .toLowerCase()
-          .includes(debouncedSearchFilter.toLowerCase());
+        !debouncedSearchFilter || entry.searchText.includes(lowerSearchFilter);
 
-      const matchesLevel = levelFilter === 'all' || entry.level === levelFilter;
-
-      const contextTags = entry.context.toLowerCase().split(/\s+/);
+      const matchesLevel =
+        levelFilter === 'all' || isAtLeastLevel(entry.level, levelFilter);
 
       const matchesContext =
         contextFilter === 'all' ||
-        contextTags.some((tag) => tag.startsWith(contextFilter.toLowerCase()));
+        entry.contextTags.some((tag) => tag.startsWith(lowerContextFilter));
 
       const matchesServer =
         serverFilter === 'all' ||
-        contextTags.some((tag) => tag === serverFilter.toLowerCase()) ||
-        entry.raw.toLowerCase().includes(serverFilter.toLowerCase());
+        entry.contextTags.some((tag) => tag === lowerServerFilter) ||
+        entry.rawLower.includes(lowerServerFilter);
 
       return matchesSearch && matchesLevel && matchesContext && matchesServer;
     });
-
-    // Apply entry limit as a display cap on filtered results
-    if (entryLimit !== 'all') {
-      const limit = parseInt(entryLimit);
-      if (filtered.length > limit) {
-        return filtered.slice(0, limit);
-      }
-    }
-
-    return filtered;
   }, [
     logEntries,
     debouncedSearchFilter,
     levelFilter,
     contextFilter,
     serverFilter,
-    entryLimit,
   ]);
 
   useEffect(() => {
     lastModifiedTimeRef.current = fileInfo?.lastModifiedTime;
   }, [fileInfo?.lastModifiedTime]);
+
+  useEffect(() => {
+    if (!actionFeedback) return undefined;
+    const timeoutId = setTimeout(() => {
+      setActionFeedback(null);
+    }, ACTION_FEEDBACK_DISPLAY_MS);
+    return () => clearTimeout(timeoutId);
+  }, [actionFeedback]);
 
   // Fetch server-N → workspace name mapping from the main process
   useEffect(() => {
@@ -433,29 +423,62 @@ function LogViewerWindow() {
         { fromByte: previousSize }
       )) as ReadLogsTailResponse;
 
-      if (tailResponse?.success && tailResponse.logs) {
-        const newEntries = parseLogLines(tailResponse.logs);
-        if (newEntries.length > 0) {
-          setLogEntries((prev) => {
-            // newEntries are already reversed (newest first)
-            // Prepend them to existing entries
-            return [...newEntries, ...prev];
-          });
-
-          setFileInfo((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  totalEntries: prev.totalEntries + newEntries.length,
-                  totalEntriesInFile:
-                    (prev.totalEntriesInFile ?? 0) + newEntries.length,
-                  lastModified: new Date().toLocaleString(),
-                  lastModifiedTime: tailResponse.lastModifiedTime,
-                }
-              : prev
+      if (tailResponse?.success) {
+        if (tailResponse.logs) {
+          const { entries: newEntries, nextId } = parseLogLines(
+            tailResponse.logs,
+            nextEntryIdRef.current
           );
+          nextEntryIdRef.current = nextId;
+          if (newEntries.length > 0) {
+            setLogEntries((prev) => {
+              // newEntries are already reversed (newest first)
+              // Prepend them to existing entries
+              return [...newEntries, ...prev];
+            });
+
+            if (isSuspendedRef.current) {
+              setPendingNewEntryCount((prev) => prev + newEntries.length);
+            }
+
+            let newestTime: number | null = null;
+            newEntries.forEach((entry) => {
+              const time = new Date(entry.timestamp).getTime();
+              if (isNaN(time)) return;
+              if (newestTime === null || time > newestTime) newestTime = time;
+            });
+
+            setFileInfo((prev) => {
+              if (!prev) return prev;
+              const nextOldestTime = prev.oldestTime;
+              const nextNewestTime =
+                newestTime !== null &&
+                (prev.newestTime === null || newestTime > prev.newestTime)
+                  ? newestTime
+                  : prev.newestTime;
+
+              return {
+                ...prev,
+                totalEntries: prev.totalEntries + newEntries.length,
+                totalEntriesInFile:
+                  (prev.totalEntriesInFile ?? 0) + newEntries.length,
+                lastModified: new Date().toLocaleString(),
+                lastModifiedTime: tailResponse.lastModifiedTime,
+                oldestTime: nextOldestTime,
+                newestTime: nextNewestTime,
+                dateRange: formatDateRange(
+                  nextOldestTime,
+                  nextNewestTime,
+                  t('logViewer.fileInfo.noEntries')
+                ),
+              };
+            });
+          }
         }
 
+        // newSize tracks bytes actually consumed (up to the last complete
+        // line), which may trail the real file size when a write is in
+        // flight — the remainder is picked up on the next poll.
         if (tailResponse.newSize !== undefined) {
           lastKnownSizeRef.current = tailResponse.newSize;
         }
@@ -464,7 +487,7 @@ function LogViewerWindow() {
     } catch (error) {
       console.error('Failed to check for updates:', error);
     }
-  }, [isStreaming, currentLogFile.isDefaultLog, loadLogs, parseLogLines]);
+  }, [isStreaming, currentLogFile.isDefaultLog, loadLogs, t]);
 
   useEffect(() => {
     if (!isStreaming || !currentLogFile.isDefaultLog) return;
@@ -480,6 +503,13 @@ function LogViewerWindow() {
   }, [autoScroll]);
 
   useEffect(() => {
+    isSuspendedRef.current = autoScroll && userHasScrolled;
+    if (!isSuspendedRef.current) {
+      setPendingNewEntryCount(0);
+    }
+  }, [autoScroll, userHasScrolled]);
+
+  useEffect(() => {
     if (
       autoScroll &&
       !userHasScrolled &&
@@ -488,6 +518,7 @@ function LogViewerWindow() {
     ) {
       const timeoutId = setTimeout(() => {
         isAutoScrollingRef.current = true;
+        lastAutoScrollAtRef.current = Date.now();
         if (virtuosoRef.current && autoScroll && !userHasScrolled) {
           virtuosoRef.current.scrollToIndex({
             index: 0,
@@ -504,10 +535,22 @@ function LogViewerWindow() {
 
   const handleScroll = useCallback(() => {
     if (isAutoScrollingRef.current) return;
+    if (Date.now() - lastAutoScrollAtRef.current < AUTO_SCROLL_GUARD_MS) return;
     if (autoScroll && !userHasScrolled) {
       setUserHasScrolled(true);
     }
   }, [autoScroll, userHasScrolled]);
+
+  const handleResumeAutoScroll = useCallback(() => {
+    setUserHasScrolled(false);
+    setPendingNewEntryCount(0);
+    if (virtuosoRef.current) {
+      isAutoScrollingRef.current = true;
+      lastAutoScrollAtRef.current = Date.now();
+      virtuosoRef.current.scrollToIndex({ index: 0, behavior: 'smooth' });
+      isAutoScrollingRef.current = false;
+    }
+  }, []);
 
   const renderLogEntry = useCallback(
     (_index: number, entry: LogEntryType) => {
@@ -518,10 +561,11 @@ function LogViewerWindow() {
           showContext={showContext}
           showServer={showServer}
           serverMapping={serverMapping}
+          highlightQuery={debouncedSearchFilter}
         />
       );
     },
-    [showContext, showServer, serverMapping]
+    [showContext, showServer, serverMapping, debouncedSearchFilter]
   );
 
   const handleOpenLogFile = useCallback(async () => {
@@ -561,6 +605,24 @@ function LogViewerWindow() {
     loadLogs();
   }, [loadLogs]);
 
+  const handleRevealLogFile = useCallback(async () => {
+    try {
+      const response = (await ipcRenderer.invoke(
+        'log-viewer-window/reveal-log-file',
+        {
+          filePath: currentLogFile.isDefaultLog
+            ? undefined
+            : currentLogFile.filePath,
+        }
+      )) as { success: boolean; error?: string };
+      if (!response?.success) {
+        console.error('Failed to reveal log file:', response?.error);
+      }
+    } catch (error) {
+      console.error('Failed to reveal log file:', error);
+    }
+  }, [currentLogFile.isDefaultLog, currentLogFile.filePath]);
+
   const handleClearLogs = useCallback(async () => {
     if (!currentLogFile.isDefaultLog) {
       return;
@@ -589,9 +651,18 @@ function LogViewerWindow() {
 
   const handleCopyLogs = useCallback(() => {
     const logText = filteredLogs.map((entry) => entry.raw).join('\n');
-    navigator.clipboard.writeText(logText).catch((error) => {
-      console.error('Failed to copy logs to clipboard:', error);
-    });
+    navigator.clipboard
+      .writeText(logText)
+      .then(() => {
+        setActionFeedback({ kind: 'copied' });
+      })
+      .catch((error) => {
+        console.error('Failed to copy logs to clipboard:', error);
+        setActionFeedback({
+          kind: 'error',
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      });
   }, [filteredLogs]);
 
   const handleSaveLogs = useCallback(async () => {
@@ -610,12 +681,19 @@ function LogViewerWindow() {
       )) as SaveLogsResponse;
 
       if (response?.success) {
-        console.log('Logs saved successfully to:', response.filePath);
+        setActionFeedback({ kind: 'saved', detail: response.filePath });
+      } else if (response?.canceled) {
+        // User canceled the save dialog — not an error, no feedback needed
       } else if (response?.error) {
         console.error('Failed to save logs:', response.error);
+        setActionFeedback({ kind: 'error', detail: response.error });
       }
     } catch (error) {
       console.error('Failed to save logs:', error);
+      setActionFeedback({
+        kind: 'error',
+        detail: error instanceof Error ? error.message : String(error),
+      });
     }
   }, [filteredLogs]);
 
@@ -758,6 +836,10 @@ function LogViewerWindow() {
               ? t('logViewer.buttons.stopAutoRefresh')
               : t('logViewer.buttons.autoRefresh')}
           </Button>
+          <Button onClick={handleRevealLogFile}>
+            <Icon name='arrow-up-box' size='x16' />
+            {t('logViewer.buttons.showInFolder')}
+          </Button>
           <Button onClick={handleCopyLogs}>
             <Icon name='copy' size='x16' />
             {t('logViewer.buttons.copy')}
@@ -780,6 +862,38 @@ function LogViewerWindow() {
           </Button>
         </ButtonGroup>
       </Box>
+
+      {actionFeedback && (
+        <Box
+          padding='x8'
+          paddingInline='x24'
+          display='flex'
+          alignItems='center'
+          fontScale='c1'
+          backgroundColor={
+            actionFeedback.kind === 'error'
+              ? 'status-background-danger'
+              : 'status-background-success'
+          }
+        >
+          <Icon
+            name={actionFeedback.kind === 'error' ? 'warning' : 'check'}
+            size='x12'
+          />
+          <Box marginInlineStart='x4'>
+            {actionFeedback.kind === 'copied' &&
+              t('logViewer.messages.copiedToClipboard')}
+            {actionFeedback.kind === 'saved' &&
+              t('logViewer.messages.savedSuccessfully')}
+            {actionFeedback.kind === 'error' &&
+              (actionFeedback.detail
+                ? t('logViewer.messages.actionFailedWithDetail', {
+                    detail: actionFeedback.detail,
+                  })
+                : t('logViewer.messages.actionFailed'))}
+          </Box>
+        </Box>
+      )}
 
       <Box
         padding='x24'
@@ -825,10 +939,13 @@ function LogViewerWindow() {
                   setUserHasScrolled(false);
                   if (filteredLogs.length > 0 && virtuosoRef.current) {
                     setTimeout(() => {
+                      isAutoScrollingRef.current = true;
+                      lastAutoScrollAtRef.current = Date.now();
                       virtuosoRef.current?.scrollToIndex({
                         index: 0,
                         behavior: 'smooth',
                       });
+                      isAutoScrollingRef.current = false;
                     }, 100);
                   }
                 }
@@ -909,7 +1026,31 @@ function LogViewerWindow() {
               <Throbber size='x32' />
             </Box>
           )}
-          {!isLoading && filteredLogs.length === 0 && (
+          {!isLoading && error && (
+            <Box
+              display='flex'
+              flexDirection='column'
+              justifyContent='center'
+              alignItems='center'
+              height='100%'
+              color='hint'
+              backgroundColor='surface-light'
+            >
+              <Icon name='warning' size='x32' color='danger' />
+              <Box marginBlockStart='x8' fontScale='p2' color='danger'>
+                {t('logViewer.messages.loadFailed')}
+              </Box>
+              <Box marginBlockStart='x4' fontScale='c1' color='hint'>
+                {error}
+              </Box>
+              <Box marginBlockStart='x12'>
+                <Button onClick={handleRefresh}>
+                  {t('logViewer.buttons.retry')}
+                </Button>
+              </Box>
+            </Box>
+          )}
+          {!isLoading && !error && filteredLogs.length === 0 && (
             <Box
               display='flex'
               flexDirection='column'
@@ -928,7 +1069,7 @@ function LogViewerWindow() {
               </Box>
             </Box>
           )}
-          {!isLoading && filteredLogs.length > 0 && (
+          {!isLoading && !error && filteredLogs.length > 0 && (
             <Box height='100%' position='relative'>
               <Box
                 position='absolute'
@@ -942,10 +1083,41 @@ function LogViewerWindow() {
                 color='hint'
                 fontScale='c1'
               >
-                {t('logViewer.fileInfo.entries', {
-                  count: filteredLogs.length,
-                })}
+                {debouncedSearchFilter
+                  ? t('logViewer.fileInfo.matches', {
+                      count: filteredLogs.length,
+                    })
+                  : t('logViewer.fileInfo.entries', {
+                      count: filteredLogs.length,
+                    })}
               </Box>
+              {autoScroll && userHasScrolled && pendingNewEntryCount > 0 && (
+                <Box
+                  is='button'
+                  onClick={handleResumeAutoScroll}
+                  position='absolute'
+                  insetBlockStart='x8'
+                  insetInlineStart='50%'
+                  style={{ transform: 'translateX(-50%)', cursor: 'pointer' }}
+                  zIndex={10}
+                  pi='x12'
+                  pb='x6'
+                  borderRadius='x24'
+                  backgroundColor='status-background-info'
+                  color='status-font-on-info'
+                  fontScale='c1'
+                  display='flex'
+                  alignItems='center'
+                  border='none'
+                >
+                  <Icon name='arrow-up' size='x12' />
+                  <Box marginInlineStart='x4'>
+                    {t('logViewer.messages.newEntriesPaused', {
+                      count: pendingNewEntryCount,
+                    })}
+                  </Box>
+                </Box>
+              )}
               <Virtuoso
                 ref={virtuosoRef}
                 data={filteredLogs}
