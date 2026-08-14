@@ -120,12 +120,35 @@ type PersistableValues_4_15_0 = PersistableValues_4_14_0 & {
 
 type PersistableValues_4_16_0 = PersistableValues_4_15_0 & {
   navigationLayout: 'tabs' | 'sidebar' | 'hidden';
+  isLogViewerWindowOpen: boolean;
+  isDownloadsWindowOpen: boolean;
+  isSettingsWindowOpen: boolean;
+  secondaryWindowStates: Record<
+    string,
+    { x: number; y: number; width: number; height: number }
+  >;
+};
+
+type PersistableValues_4_16_1 = PersistableValues_4_16_0 & {
+  isDownloadsPercentageEnabled: boolean;
+};
+
+type PersistableValues_4_16_2 = PersistableValues_4_16_1 & {
+  /**
+   * Bumped when the Windows/Linux menu-bar default changes so existing
+   * installs pick up the new auto-hide default once without clobbering a
+   * later user choice. macOS ignores this field.
+   */
+  menuBarDefaultRevision?: number;
 };
 
 export type PersistableValues = Pick<
-  PersistableValues_4_16_0,
-  keyof PersistableValues_4_16_0
+  PersistableValues_4_16_2,
+  keyof PersistableValues_4_16_2
 >;
+
+/** Current menu-bar default policy for Windows/Linux (auto-hide, Alt reveals). */
+export const MENU_BAR_DEFAULT_REVISION = 1;
 
 export const migrations = {
   '>=3.1.0': (before: PersistableValues_0_0_0): PersistableValues_3_1_0 => {
@@ -241,5 +264,36 @@ export const migrations = {
     ...before,
     navigationLayout:
       (before as Partial<PersistableValues_4_16_0>).navigationLayout ?? 'tabs',
+    isLogViewerWindowOpen:
+      (before as Partial<PersistableValues_4_16_0>).isLogViewerWindowOpen ??
+      false,
+    isDownloadsWindowOpen:
+      (before as Partial<PersistableValues_4_16_0>).isDownloadsWindowOpen ??
+      false,
+    isSettingsWindowOpen:
+      (before as Partial<PersistableValues_4_16_0>).isSettingsWindowOpen ??
+      false,
+    secondaryWindowStates:
+      (before as Partial<PersistableValues_4_16_0>).secondaryWindowStates ?? {},
   }),
+  '>=4.16.1': (before: PersistableValues_4_16_0): PersistableValues_4_16_1 => ({
+    ...before,
+    isDownloadsPercentageEnabled: false,
+  }),
+  '>=4.16.2': (before: PersistableValues_4_16_1): PersistableValues_4_16_2 => {
+    // electron-store only runs this when projectVersion satisfies >=4.16.2.
+    // mergePersistableValues also applies the same revision for builds that
+    // ship the policy before that version bump (see MENU_BAR_DEFAULT_REVISION).
+    if (process.platform === 'darwin') {
+      return {
+        ...before,
+        menuBarDefaultRevision: MENU_BAR_DEFAULT_REVISION,
+      };
+    }
+    return {
+      ...before,
+      isMenuBarEnabled: false,
+      menuBarDefaultRevision: MENU_BAR_DEFAULT_REVISION,
+    };
+  },
 };

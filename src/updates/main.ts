@@ -3,30 +3,31 @@ import path from 'path';
 
 import { BrowserWindow, app, autoUpdater as nativeUpdater } from 'electron';
 import { autoUpdater } from 'electron-updater';
-import { gt as semverGt } from 'semver';
+import { gt as semverGt, inc as semverInc } from 'semver';
 
 import { listen, dispatch, select } from '../store';
 import type { RootState } from '../store/rootReducer';
-import {
-  UPDATE_DIALOG_SKIP_UPDATE_CLICKED,
-  UPDATE_DIALOG_INSTALL_BUTTON_CLICKED,
-  ABOUT_DIALOG_UPDATE_CHANNEL_CHANGED,
-} from '../ui/actions';
+import { ABOUT_DIALOG_UPDATE_CHANNEL_CHANGED } from '../ui/actions';
 import {
   askUpdateInstall,
   AskUpdateInstallResponse,
   warnAboutInstallUpdateLater,
-  warnAboutUpdateDownload,
   warnAboutUpdateSkipped,
 } from '../ui/main/dialogs';
 import {
   UPDATE_SKIPPED,
   UPDATES_CHECK_FOR_UPDATES_REQUESTED,
   UPDATES_CHECKING_FOR_UPDATE,
+  UPDATES_DOWNLOAD_PROGRESSED,
+  UPDATES_DOWNLOAD_REQUESTED,
   UPDATES_ERROR_THROWN,
+  UPDATES_INSTALL_REQUESTED,
   UPDATES_NEW_VERSION_AVAILABLE,
   UPDATES_NEW_VERSION_NOT_AVAILABLE,
   UPDATES_READY,
+  UPDATES_SIMULATION_REQUESTED,
+  UPDATES_SKIP_REQUESTED,
+  UPDATES_UPDATE_DOWNLOADED,
   UPDATES_CHANNEL_CHANGED,
 } from './actions';
 import type {
@@ -164,6 +165,207 @@ const loadConfiguration = async (): Promise<UpdateConfiguration> => {
 
 let isUserInitiatedCheck = false;
 
+/**
+ * Set while the download was started from the titlebar update label. The label
+ * reports progress and offers the restart itself, so the legacy modal prompts
+ * are skipped for that path.
+ */
+let isLabelInitiatedDownload = false;
+
+/** Developer-mode flow that never contacts the update server nor restarts. */
+let isSimulatingUpdate = false;
+let simulatedDownloadTimer: ReturnType<typeof setInterval> | null = null;
+
+const stopSimulatedDownload = (): void => {
+  if (simulatedDownloadTimer) {
+    clearInterval(simulatedDownloadTimer);
+    simulatedDownloadTimer = null;
+  }
+};
+
+const startSimulatedDownload = (): void => {
+  stopSimulatedDownload();
+
+  let percent = 0;
+  simulatedDownloadTimer = setInterval(() => {
+    percent += 7;
+
+    if (percent >= 100) {
+      stopSimulatedDownload();
+      dispatch({ type: UPDATES_UPDATE_DOWNLOADED });
+      return;
+    }
+
+    dispatch({ type: UPDATES_DOWNLOAD_PROGRESSED, payload: percent });
+  }, 250);
+};
+
+const endSimulatedUpdate = (): void => {
+  stopSimulatedDownload();
+  isSimulatingUpdate = false;
+  isLabelInitiatedDownload = false;
+  dispatch({ type: UPDATES_NEW_VERSION_NOT_AVAILABLE });
+};
+
+const nativeUpdateDownloadedCallback = (): void => {
+  nativeUpdater.removeListener(
+    'update-downloaded',
+    nativeUpdateDownloadedCallback
+  );
+  nativeUpdater.quitAndInstall();
+};
+
+/** Quits and relaunches into the freshly downloaded update. */
+const installDownloadedUpdate = (): void => {
+  setImmediate(() => {
+    app.removeAllListeners('window-all-closed');
+    if (process.platform === 'darwin') {
+      const allBrowserWindows = BrowserWindow.getAllWindows();
+      allBrowserWindows.forEach((browserWindow) => {
+        browserWindow.removeAllListeners('close');
+        browserWindow.destroy();
+      });
+      nativeUpdater.checkForUpdates();
+      nativeUpdater.on('update-downloaded', nativeUpdateDownloadedCallback);
+    } else {
+      autoUpdater.quitAndInstall(true, true);
+    }
+  });
+};
+
+/**
+ * GitHub intermittently answers the release-metadata request with an empty
+ * body, which electron-updater surfaces as ERR_UPDATER_NO_PUBLISHED_VERSIONS
+ * ("No published versions on GitHub") even though releases exist, and slow or
+ * flaky networks produce similar one-off failures. A short retry ladder rides
+ * those out.
+ *
+ * While a ladder is in flight it owns error reporting: the autoUpdater `error`
+ * listener stays quiet and the ladder's caller decides what the final failure
+ * means (a manual check reports to the UI, an automatic one only logs).
+ */
+const UPDATE_CHECK_RETRY_DELAYS_MS = [2_000, 5_000];
+
+let isUpdateCheckInFlight = false;
+
+const checkForUpdatesWithRetry = async (attempt = 0): Promise<void> => {
+  isUpdateCheckInFlight = true;
+
+  try {
+    await autoUpdater.checkForUpdates();
+    isUpdateCheckInFlight = false;
+  } catch (error) {
+    if (attempt >= UPDATE_CHECK_RETRY_DELAYS_MS.length) {
+      isUpdateCheckInFlight = false;
+      throw error;
+    }
+
+    console.warn(
+      `Update check failed (attempt ${attempt + 1} of ${
+        UPDATE_CHECK_RETRY_DELAYS_MS.length + 1
+      }), retrying:`,
+      error instanceof Error ? error.message : error
+    );
+    await new Promise((resolve) => {
+      setTimeout(resolve, UPDATE_CHECK_RETRY_DELAYS_MS[attempt]);
+    });
+    return checkForUpdatesWithRetry(attempt + 1);
+  }
+};
+
+let pendingUpdateCheck: Promise<void> | null = null;
+
+/**
+ * Starts a retried update check, or joins the one already running — a manual
+ * check requested during the startup ladder's backoff window must not race a
+ * second ladder (and its error-suppression flag) against the first.
+ */
+const requestUpdateCheck = (): Promise<void> => {
+  if (!pendingUpdateCheck) {
+    pendingUpdateCheck = checkForUpdatesWithRetry().finally(() => {
+      pendingUpdateCheck = null;
+    });
+  }
+
+  return pendingUpdateCheck;
+};
+
+const dispatchUpdateError = (error: unknown): void => {
+  if (error instanceof Error) {
+    dispatch({
+      type: UPDATES_ERROR_THROWN,
+      payload: {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      },
+    });
+  }
+};
+
+/**
+ * Wires the titlebar update label to the updater. Registered before the
+ * "updating not allowed/enabled" bail-out so the simulated flow stays available
+ * in builds that cannot self-update (e.g. unpackaged development runs).
+ */
+export const setupUpdateLabelFlow = (): void => {
+  listen(UPDATES_SIMULATION_REQUESTED, async () => {
+    stopSimulatedDownload();
+    isSimulatingUpdate = true;
+    isLabelInitiatedDownload = true;
+
+    const currentVersion = app.getVersion();
+    const simulatedVersion =
+      semverInc(currentVersion, 'minor') ?? `${currentVersion}-simulated`;
+
+    dispatch({
+      type: UPDATES_NEW_VERSION_AVAILABLE,
+      payload: simulatedVersion,
+    });
+  });
+
+  listen(UPDATES_DOWNLOAD_REQUESTED, async () => {
+    isLabelInitiatedDownload = true;
+
+    if (isSimulatingUpdate) {
+      startSimulatedDownload();
+      return;
+    }
+
+    try {
+      await autoUpdater.downloadUpdate();
+    } catch (error) {
+      isLabelInitiatedDownload = false;
+      dispatchUpdateError(error);
+    }
+  });
+
+  listen(UPDATES_INSTALL_REQUESTED, async () => {
+    if (isSimulatingUpdate) {
+      // Nothing to install — unwind the simulation instead of restarting.
+      endSimulatedUpdate();
+      return;
+    }
+
+    try {
+      installDownloadedUpdate();
+    } catch (error) {
+      dispatchUpdateError(error);
+    }
+  });
+
+  listen(UPDATES_SKIP_REQUESTED, async (action) => {
+    if (isSimulatingUpdate) {
+      // Skipping a fake version must not persist into the real settings.
+      endSimulatedUpdate();
+      return;
+    }
+
+    await warnAboutUpdateSkipped();
+    dispatch({ type: UPDATE_SKIPPED, payload: action.payload });
+  });
+};
+
 export const setupUpdates = async (): Promise<void> => {
   // This is necessary to make the updater work in development mode
   if (process.env.NODE_ENV === 'development') {
@@ -179,6 +381,18 @@ export const setupUpdates = async (): Promise<void> => {
   }
 
   autoUpdater.autoDownload = false;
+
+  // electron-updater logs transient check failures (flaky GitHub metadata
+  // responses, offline machines) at error level, which reads as an app fault
+  // in user-shared logs even though the user can do nothing about it. Route
+  // its logging through warn and below — failures that matter to the user
+  // reach the UI through the store, not the log.
+  autoUpdater.logger = {
+    info: (message) => console.log(message),
+    warn: (message) => console.warn(message),
+    error: (message) => console.warn(message),
+    debug: (message) => console.debug(message),
+  };
 
   const {
     isUpdatingAllowed,
@@ -210,6 +424,10 @@ export const setupUpdates = async (): Promise<void> => {
       updateChannel,
     },
   });
+
+  // Registered first so the simulated flow (and the label's own actions) stay
+  // reachable even when this build cannot self-update.
+  setupUpdateLabelFlow();
 
   if (!isUpdatingAllowed || !isUpdatingEnabled) {
     return;
@@ -274,15 +492,23 @@ export const setupUpdates = async (): Promise<void> => {
     dispatch({ type: UPDATES_NEW_VERSION_NOT_AVAILABLE });
   });
 
-  const nativeUpdateDownloadedCallback = () => {
-    nativeUpdater.removeListener(
-      'update-downloaded',
-      nativeUpdateDownloadedCallback
-    );
-    nativeUpdater.quitAndInstall();
-  };
+  autoUpdater.addListener('download-progress', ({ percent }) => {
+    dispatch({
+      type: UPDATES_DOWNLOAD_PROGRESSED,
+      payload: Math.max(0, Math.min(100, Math.round(percent))),
+    });
+  });
 
   autoUpdater.addListener('update-downloaded', async () => {
+    dispatch({ type: UPDATES_UPDATE_DOWNLOADED });
+
+    // Downloads started from the titlebar label surface the restart action in
+    // the label itself, so the modal prompt would be redundant.
+    if (isLabelInitiatedDownload) {
+      isLabelInitiatedDownload = false;
+      return;
+    }
+
     const response = await askUpdateInstall();
 
     if (response === AskUpdateInstallResponse.INSTALL_LATER) {
@@ -291,34 +517,19 @@ export const setupUpdates = async (): Promise<void> => {
     }
 
     try {
-      setImmediate(() => {
-        app.removeAllListeners('window-all-closed');
-        if (process.platform === 'darwin') {
-          const allBrowserWindows = BrowserWindow.getAllWindows();
-          allBrowserWindows.forEach((browserWindow) => {
-            browserWindow.removeAllListeners('close');
-            browserWindow.destroy();
-          });
-          nativeUpdater.checkForUpdates();
-          nativeUpdater.on('update-downloaded', nativeUpdateDownloadedCallback);
-        } else {
-          autoUpdater.quitAndInstall(true, true);
-        }
-      });
+      installDownloadedUpdate();
     } catch (error) {
-      error instanceof Error &&
-        dispatch({
-          type: UPDATES_ERROR_THROWN,
-          payload: {
-            message: error.message,
-            stack: error.stack,
-            name: error.name,
-          },
-        });
+      dispatchUpdateError(error);
     }
   });
 
   autoUpdater.addListener('error', (error) => {
+    // A check ladder owns error reporting for its final outcome; this listener
+    // only covers failures outside a check (e.g. downloads).
+    if (isUpdateCheckInFlight) {
+      return;
+    }
+
     dispatch({
       type: UPDATES_ERROR_THROWN,
       payload: {
@@ -330,63 +541,33 @@ export const setupUpdates = async (): Promise<void> => {
   });
 
   if (doCheckForUpdatesOnStartup) {
-    try {
-      isUserInitiatedCheck = false;
-      await autoUpdater.checkForUpdates();
-    } catch (error) {
-      error instanceof Error &&
-        dispatch({
-          type: UPDATES_ERROR_THROWN,
-          payload: {
-            message: error.message,
-            stack: error.stack,
-            name: error.name,
-          },
-        });
-    }
+    // Deliberately not awaited: the rest of the app setup must not wait on
+    // GitHub, especially while failed attempts back off and retry.
+    isUserInitiatedCheck = false;
+    requestUpdateCheck().catch((error) => {
+      // An automatic check failing is nothing a user can act on — keep the UI
+      // quiet, settle the "checking" state, and leave a note in the log.
+      console.warn(
+        'Automatic update check failed:',
+        error instanceof Error ? error.message : error
+      );
+      dispatch({ type: UPDATES_NEW_VERSION_NOT_AVAILABLE });
+    });
   }
 
   listen(UPDATES_CHECK_FOR_UPDATES_REQUESTED, async () => {
     try {
       isUserInitiatedCheck = true;
       await new Promise((resolve) => setTimeout(resolve, 100));
-      await autoUpdater.checkForUpdates();
+      await requestUpdateCheck();
     } catch (error) {
-      error instanceof Error &&
-        dispatch({
-          type: UPDATES_ERROR_THROWN,
-          payload: {
-            message: error.message,
-            stack: error.stack,
-            name: error.name,
-          },
-        });
-    }
-  });
-
-  listen(UPDATE_DIALOG_SKIP_UPDATE_CLICKED, async (action) => {
-    await warnAboutUpdateSkipped();
-    dispatch({
-      type: UPDATE_SKIPPED,
-      payload: action.payload,
-    });
-  });
-
-  listen(UPDATE_DIALOG_INSTALL_BUTTON_CLICKED, async () => {
-    await warnAboutUpdateDownload();
-
-    try {
-      await autoUpdater.downloadUpdate();
-    } catch (error) {
-      error instanceof Error &&
-        dispatch({
-          type: UPDATES_ERROR_THROWN,
-          payload: {
-            message: error.message,
-            stack: error.stack,
-            name: error.name,
-          },
-        });
+      // A failed check isn't actionable for the user either: resolve to the
+      // benign "no update available" outcome and keep the details in the log.
+      console.warn(
+        'Update check failed:',
+        error instanceof Error ? error.message : error
+      );
+      dispatch({ type: UPDATES_NEW_VERSION_NOT_AVAILABLE });
     }
   });
 };

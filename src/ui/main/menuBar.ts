@@ -6,17 +6,20 @@ import i18next from 'i18next';
 import { createSelector, createStructuredSelector } from 'reselect';
 
 import { relaunchApp } from '../../app/main/app';
+import { DOWNLOADS_SIMULATION_REQUESTED } from '../../downloads/actions';
 import { CERTIFICATES_CLEARED } from '../../navigation/actions';
 import { dispatch, select, Service } from '../../store';
 import type { RootState } from '../../store/rootReducer';
-import { UPDATES_CHECK_FOR_UPDATES_REQUESTED } from '../../updates/actions';
+import {
+  UPDATES_CHECK_FOR_UPDATES_REQUESTED,
+  UPDATES_SIMULATION_REQUESTED,
+} from '../../updates/actions';
 import * as urls from '../../urls';
 import { openExternal } from '../../utils/browserLauncher';
 import { openVideoCallWebviewDevTools } from '../../videoCallWindow/ipc';
 import {
   APP_MENU_TRIGGERED,
   CLEAR_CACHE_TRIGGERED,
-  MENU_BAR_ABOUT_CLICKED,
   MENU_BAR_ADD_NEW_SERVER_CLICKED,
   MENU_BAR_SELECT_SERVER_CLICKED,
   MENU_BAR_SET_NAVIGATION_LAYOUT_CLICKED,
@@ -50,6 +53,35 @@ const on = (
   getMenuItems: () => MenuItemConstructorOptions[]
 ): MenuItemConstructorOptions[] => (condition ? getMenuItems() : []);
 
+const createSimulationMenuItems = (): MenuItemConstructorOptions[] => [
+  {
+    id: 'simulateUpdate',
+    label: t('menus.simulateUpdate'),
+    click: async () => {
+      const browserWindow = await getRootWindow();
+
+      if (!browserWindow.isVisible()) {
+        browserWindow.showInactive();
+      }
+      browserWindow.focus();
+      dispatch({ type: UPDATES_SIMULATION_REQUESTED });
+    },
+  },
+  {
+    id: 'simulateDownload',
+    label: t('menus.simulateDownload'),
+    click: async () => {
+      const browserWindow = await getRootWindow();
+
+      if (!browserWindow.isVisible()) {
+        browserWindow.showInactive();
+      }
+      browserWindow.focus();
+      dispatch({ type: DOWNLOADS_SIMULATION_REQUESTED });
+    },
+  },
+];
+
 // The layout shortcut advances through tabs → sidebar → hidden → tabs. It is
 // shown on whichever radio is the *next* step, so pressing it (or clicking that
 // item) moves the cycle forward one place.
@@ -75,17 +107,18 @@ const selectAddServersDeps = createStructuredSelector({
     isAddNewServersEnabled,
 });
 
+/**
+ * macOS only, and deliberately the system panel rather than anything of ours:
+ * every Mac app has this item in the same place, and the version and copyright
+ * it shows come from the bundle. Windows and Linux have no such convention, so
+ * they get no About item at all — the version lives in the settings window's
+ * Advanced section instead.
+ */
 const createAboutMenuItem = (): MenuItemConstructorOptions => ({
   id: 'about',
   label: t('menus.about', { appName: app.name }),
-  click: async () => {
-    const browserWindow = await getRootWindow();
-
-    if (!browserWindow.isVisible()) {
-      browserWindow.showInactive();
-    }
-    browserWindow.focus();
-    dispatch({ type: MENU_BAR_ABOUT_CLICKED });
+  click: () => {
+    app.showAboutPanel();
   },
 });
 
@@ -407,15 +440,13 @@ export const createViewMenu = createSelector(
           },
         },
       ]),
-      ...on(process.platform === 'linux', () => [
+      ...on(process.platform !== 'darwin', () => [
         {
           id: 'showMenuBar',
           label: t('menus.showMenuBar'),
           type: 'checkbox',
           checked: isMenuBarEnabled,
-          enabled: !isMenuBarEnabled || navigationLayout === 'sidebar',
-          accelerator:
-            process.platform === 'darwin' ? 'Shift+Command+M' : 'Ctrl+Shift+M',
+          accelerator: 'Ctrl+Shift+M',
           click: async ({ checked }) => {
             const browserWindow = await getRootWindow();
 
@@ -442,10 +473,6 @@ export const createViewMenu = createSelector(
         type: 'radio',
         checked: navigationLayout === 'tabs',
         accelerator: nextNavigationLayoutAccelerator(navigationLayout, 'tabs'),
-        enabled:
-          process.platform !== 'linux' ||
-          isMenuBarEnabled ||
-          navigationLayout === 'tabs',
         click: async () => {
           const browserWindow = await getRootWindow();
 
@@ -468,10 +495,6 @@ export const createViewMenu = createSelector(
           navigationLayout,
           'sidebar'
         ),
-        enabled:
-          process.platform !== 'linux' ||
-          isMenuBarEnabled ||
-          navigationLayout === 'sidebar',
         click: async () => {
           const browserWindow = await getRootWindow();
 
@@ -494,10 +517,6 @@ export const createViewMenu = createSelector(
           navigationLayout,
           'hidden'
         ),
-        enabled:
-          process.platform !== 'linux' ||
-          isMenuBarEnabled ||
-          navigationLayout === 'hidden',
         click: async () => {
           const browserWindow = await getRootWindow();
 
@@ -567,6 +586,8 @@ const selectWindowDeps = createStructuredSelector({
   }: RootState) => isShowWindowOnUnreadChangedEnabled,
   isAddNewServersEnabled: ({ isAddNewServersEnabled }: RootState) =>
     isAddNewServersEnabled,
+  isDeveloperModeEnabled: ({ isDeveloperModeEnabled }: RootState) =>
+    isDeveloperModeEnabled,
 });
 
 export const createWindowMenu = createSelector(
@@ -822,6 +843,7 @@ export const createHelpMenu = createSelector(
           });
         },
       },
+      ...on(isDeveloperModeEnabled, createSimulationMenuItems),
       {
         id: 'videoCallToolsSubmenu',
         label: t('menus.videoCallTools'),
@@ -916,21 +938,6 @@ export const createHelpMenu = createSelector(
           openExternal(urls.rocketchat.site);
         },
       },
-      ...on(process.platform !== 'darwin', () => [
-        {
-          id: 'about',
-          label: t('menus.about', { appName: app.name }),
-          click: async () => {
-            const browserWindow = await getRootWindow();
-
-            if (!browserWindow.isVisible()) {
-              browserWindow.showInactive();
-            }
-            browserWindow.focus();
-            dispatch({ type: MENU_BAR_ABOUT_CLICKED });
-          },
-        },
-      ]),
     ],
   })
 );
@@ -956,11 +963,7 @@ const createRocketChatMenu = createSelector(
   (): MenuItemConstructorOptions => ({
     id: 'rocketChatMenu',
     label: app.name,
-    submenu: [
-      createAboutMenuItem(),
-      { type: 'separator' },
-      createDisableGpuMenuItem(),
-    ],
+    submenu: [createDisableGpuMenuItem()],
   })
 );
 
@@ -983,6 +986,7 @@ export const selectAppMenuPopupTemplate = createSelector(
     createViewMenu,
     createWindowMenu,
     createHelpMenu,
+    ({ isDeveloperModeEnabled }: RootState) => isDeveloperModeEnabled,
   ],
   (
     rocketChatMenu,
@@ -990,7 +994,8 @@ export const selectAppMenuPopupTemplate = createSelector(
     editMenu,
     viewMenu,
     windowMenu,
-    helpMenu
+    helpMenu,
+    isDeveloperModeEnabled
   ): MenuItemConstructorOptions[] => {
     const settingsItem: MenuItemConstructorOptions = {
       id: 'settings',
@@ -1020,7 +1025,15 @@ export const selectAppMenuPopupTemplate = createSelector(
     // already lives in the system menu bar and quitting is available there, so
     // the meatball popup only needs the desktop-app extras.
     if (process.platform === 'darwin') {
-      return [settingsItem, downloadsItem, checkForUpdatesItem];
+      return [
+        settingsItem,
+        downloadsItem,
+        checkForUpdatesItem,
+        ...on(isDeveloperModeEnabled, () => [
+          { type: 'separator' },
+          ...createSimulationMenuItems(),
+        ]),
+      ];
     }
 
     return [
@@ -1039,6 +1052,10 @@ export const selectAppMenuPopupTemplate = createSelector(
       settingsItem,
       downloadsItem,
       checkForUpdatesItem,
+      ...on(isDeveloperModeEnabled, () => [
+        { type: 'separator' },
+        ...createSimulationMenuItems(),
+      ]),
       { type: 'separator' },
       createQuitMenuItem(),
     ];
@@ -1054,6 +1071,7 @@ export const selectServerSwitcherMenuTemplate = createSelector(
     servers,
     currentView,
     isAddNewServersEnabled,
+    isDeveloperModeEnabled,
   }): MenuItemConstructorOptions[] => {
     const serverItems = servers.map((server, i): MenuItemConstructorOptions => {
       const isActive =
@@ -1118,6 +1136,17 @@ export const selectServerSwitcherMenuTemplate = createSelector(
             dispatch({ type: MENU_BAR_ADD_NEW_SERVER_CLICKED });
           },
         } as MenuItemConstructorOptions,
+      ]),
+      {
+        id: 'checkForUpdates',
+        label: t('menus.checkForUpdates'),
+        click: () => {
+          dispatch({ type: UPDATES_CHECK_FOR_UPDATES_REQUESTED });
+        },
+      },
+      ...on(isDeveloperModeEnabled, () => [
+        { type: 'separator' } as MenuItemConstructorOptions,
+        ...createSimulationMenuItems(),
       ]),
     ];
   }
@@ -1218,18 +1247,20 @@ class MenuBarService extends Service {
         return;
       }
 
+      // Windows and Linux share the same model: keep the menu attached for
+      // accelerators, show it permanently when isMenuBarEnabled, otherwise
+      // auto-hide so a solo Alt press reveals it (classic desktop chrome).
+      // isMenuBarEnabled is already a view-menu dependency, so this watcher
+      // re-runs when the toggle flips and re-applies visibility here.
       const browserWindow = await getRootWindow();
-
-      if (process.platform === 'win32') {
-        Menu.setApplicationMenu(null);
-        browserWindow.setMenu(menu);
-        browserWindow.setMenuBarVisibility(false);
-        browserWindow.autoHideMenuBar = false;
-        return;
-      }
+      const isMenuBarEnabled = select(
+        ({ isMenuBarEnabled }) => isMenuBarEnabled
+      );
 
       Menu.setApplicationMenu(null);
       browserWindow.setMenu(menu);
+      browserWindow.autoHideMenuBar = !isMenuBarEnabled;
+      browserWindow.setMenuBarVisibility(isMenuBarEnabled);
     });
 
     this.listen(APP_MENU_TRIGGERED, async (action) => {

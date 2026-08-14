@@ -51,19 +51,12 @@
       "announcement": "選擇要分享的畫面"
     },
     "update": {
-      "title": "可用的更新",
       "announcement": "有新的更新程式",
       "message": "有新版本的 Rocket.Chat 桌面應用程式！",
-      "currentVersion": "目前版本:",
-      "newVersion": "最新版本:",
+      "currentVersion": "目前版本",
+      "newVersion": "最新版本",
       "install": "安裝更新",
-      "remindLater": "稍後再提醒我",
       "skip": "略過這個版本"
-    },
-    "updateDownloading": {
-      "title": "正在下載更新",
-      "message": "當準備好可以安裝更新程式的時候，您將會收到通知。",
-      "ok": "好"
     },
     "updateInstallLater": {
       "title": "稍後再安裝",
@@ -188,6 +181,43 @@
       "reload": "重新載入伺服器",
       "remove": "移除伺服器",
       "openDevTools": "開啟開發工具"
+    }
+  },
+  "tabBar": {
+    "workspaces": "工作區",
+    "addWorkspace": "新增工作區",
+    "unreadMessage_other": "{{- count}} 則訊息",
+    "unreadMessages": "未讀訊息",
+    "meatballMenu": "應用程式選單",
+    "update": {
+      "available": "更新",
+      "updating": "更新中…",
+      "percent": "{{- percent}}%",
+      "restart": "重新啟動以更新",
+      "tooltip": "桌面應用程式有新版本可用，點擊查看詳細資訊",
+      "checking": "正在檢查更新…",
+      "upToDate": "已是最新版本",
+      "upToDateTooltip": "{{- version}} 已是最新版本",
+      "checkFailed": "無法檢查更新"
+    },
+    "windowControls": {
+      "minimize": "最小化",
+      "maximize": "最大化",
+      "restore": "還原",
+      "close": "關閉"
+    },
+    "downloads": {
+      "tooltip": "正在下載檔案，按一下以查看詳情",
+      "title": "下載",
+      "showAll": "顯示所有下載",
+      "pause": "暫停",
+      "resume": "繼續",
+      "cancel": "取消",
+      "showInFolder": "在資料夾中顯示",
+      "percent": "{{- percent}}%",
+      "canceled": "已取消",
+      "failed": "失敗",
+      "dismiss": "關閉"
     }
   },
   "touchBar": {

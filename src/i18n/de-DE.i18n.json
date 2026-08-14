@@ -64,19 +64,12 @@
       "announcement": "Wählen Sie den zu teilenden Bildschirm aus"
     },
     "update": {
-      "title": "Aktualisierung verfügbar",
       "announcement": "Neue Aktualisierung verfügbar",
       "message": "Eine neue Version der Rocket.Chat Desktop App ist verfügbar!",
-      "currentVersion": "Aktuelle Version:",
-      "newVersion": "Neue Version:",
+      "currentVersion": "Aktuelle Version",
+      "newVersion": "Neue Version",
       "install": "Update installieren",
-      "remindLater": "Später erinnern",
       "skip": "Diese Version überspringen"
-    },
-    "updateDownloading": {
-      "title": "Aktualisierung wird heruntergeladen",
-      "message": "Sie werden benachrichtigt, wenn die Aktualisierung bereit zur Installation ist",
-      "ok": "OK"
     },
     "updateInstallLater": {
       "title": "Wird später installiert",
@@ -221,6 +214,10 @@
         "description": "Lässt das Fenster blinken, um die Aufmerksamkeit des Benutzers zu erregen.",
         "onLinux": "Einige Linux-Distributionen unterstützen diese Funktion nicht.",
         "descriptionDarwin": "Lässt das App-Symbol im Dock hüpfen, um die Aufmerksamkeit des Benutzers zu erregen."
+      },
+      "downloadsPercentage": {
+        "title": "Download-Prozentsatz",
+        "description": "Zeigt den Download-Fortschrittsprozenzsatz in der Tab-Leiste an."
       },
       "hardwareAcceleration": {
         "title": "Hardware-Beschleunigung",
@@ -379,6 +376,44 @@
       "openDevTools": "DevTools öffnen",
       "clearCache": "Cache leeren",
       "clearStorageData": "Speicherdaten löschen"
+    }
+  },
+  "tabBar": {
+    "workspaces": "Arbeitsbereiche",
+    "addWorkspace": "Arbeitsbereich hinzufügen",
+    "unreadMessage_one": "{{- count}} Nachricht",
+    "unreadMessage_other": "{{- count}} Nachrichten",
+    "unreadMessages": "Ungelesene Nachrichten",
+    "meatballMenu": "Anwendungsmenü",
+    "update": {
+      "available": "Update",
+      "updating": "Wird aktualisiert…",
+      "percent": "{{- percent}}%",
+      "restart": "Zum Aktualisieren neu starten",
+      "tooltip": "Eine neue Version der Desktop-App ist verfügbar, klicken Sie für Details",
+      "checking": "Suche nach Updates…",
+      "upToDate": "Sie sind auf dem neuesten Stand",
+      "upToDateTooltip": "{{- version}} ist die neueste Version",
+      "checkFailed": "Updates konnten nicht geprüft werden"
+    },
+    "windowControls": {
+      "minimize": "Minimieren",
+      "maximize": "Maximieren",
+      "restore": "Wiederherstellen",
+      "close": "Schließen"
+    },
+    "downloads": {
+      "tooltip": "Dateien werden heruntergeladen, klicken Sie für Details",
+      "title": "Downloads",
+      "showAll": "Alle Downloads anzeigen",
+      "pause": "Pause",
+      "resume": "Fortsetzen",
+      "cancel": "Abbrechen",
+      "showInFolder": "Im Ordner anzeigen",
+      "percent": "{{- percent}}%",
+      "canceled": "Abgebrochen",
+      "failed": "Fehlgeschlagen",
+      "dismiss": "Schließen"
     }
   },
   "touchBar": {

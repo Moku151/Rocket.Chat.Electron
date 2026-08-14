@@ -46,13 +46,16 @@ jest.mock('../TopBar', () => ({
   __esModule: true,
   TopBar: ({
     leadingSlot,
+    centerSlot,
     trailingSlot,
   }: {
     leadingSlot?: React.ReactNode;
+    centerSlot?: React.ReactNode;
     trailingSlot?: React.ReactNode;
   }) => (
     <div data-testid='top-bar'>
       {leadingSlot}
+      {centerSlot}
       {trailingSlot}
     </div>
   ),
@@ -86,9 +89,11 @@ jest.mock('../TabBar/WindowControls', () => ({
   WindowControls: () => <div data-testid='window-controls' />,
 }));
 
-jest.mock('../AboutDialog', () => ({
+jest.mock('../TopBar/DownloadsIndicator', () => ({
   __esModule: true,
-  AboutDialog: () => <div data-testid='about-dialog' />,
+  DownloadsIndicator: ({ compact = false }: { compact?: boolean }) => (
+    <div data-testid='downloads-indicator' data-compact={String(compact)} />
+  ),
 }));
 
 jest.mock('../ServerInfoModal', () => ({
@@ -116,11 +121,6 @@ jest.mock('../SelectClientCertificateDialog', () => ({
   SelectClientCertificateDialog: () => (
     <div data-testid='select-client-certificate-dialog' />
   ),
-}));
-
-jest.mock('../UpdateDialog', () => ({
-  __esModule: true,
-  UpdateDialog: () => <div data-testid='update-dialog' />,
 }));
 
 jest.mock('../ClearCacheDialog', () => ({
@@ -170,6 +170,15 @@ const buildState = (overrides: Record<string, unknown> = {}) =>
     userThemePreference: 'auto',
     isTransparentWindowEnabled: false,
     navigationLayout: 'sidebar',
+    rootWindowState: {
+      focused: true,
+      visible: true,
+      maximized: false,
+      minimized: false,
+      fullscreen: false,
+      normal: true,
+      bounds: { x: 0, y: 0, width: 1200, height: 800 },
+    },
     ...overrides,
   }) as any;
 
@@ -201,10 +210,8 @@ describe('Shell', () => {
   it('mounts the top-level dialogs', () => {
     renderWithStore(<Shell />, { preloadedState: buildState() });
 
-    expect(screen.getByTestId('about-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('server-info-modal')).toBeInTheDocument();
     expect(screen.getByTestId('supported-version-dialog')).toBeInTheDocument();
-    expect(screen.getByTestId('update-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('clear-cache-dialog')).toBeInTheDocument();
     expect(
       screen.getByTestId('outlook-credentials-dialog')
@@ -406,6 +413,160 @@ describe('Shell', () => {
       // darwin tabs trailing slot, so it is expected.
       expect(screen.queryByTestId('window-controls')).not.toBeInTheDocument();
       expect(screen.getByTestId('meatball-menu-button')).toBeInTheDocument();
+    });
+  });
+
+  describe('linux chrome (Windows-parity client decorations)', () => {
+    let restorePlatform: () => void;
+
+    afterEach(() => {
+      restorePlatform?.();
+    });
+
+    it('mounts the meatball menu and window controls as TabBar slots when navigationLayout is tabs', () => {
+      restorePlatform = setPlatform('linux');
+
+      renderWithStore(<Shell />, {
+        preloadedState: buildState({ navigationLayout: 'tabs' }),
+      });
+
+      expect(screen.getByTestId('tab-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('meatball-menu-button')).toBeInTheDocument();
+      expect(screen.getByTestId('window-controls')).toBeInTheDocument();
+      expect(screen.getByTestId('downloads-indicator')).toBeInTheDocument();
+    });
+
+    it('mounts the TopBar with window controls plus the vertical TabBar meatball when navigationLayout is sidebar', () => {
+      restorePlatform = setPlatform('linux');
+
+      renderWithStore(<Shell />, {
+        preloadedState: buildState({ navigationLayout: 'sidebar' }),
+      });
+
+      expect(screen.getByTestId('top-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('downloads-indicator')).toBeInTheDocument();
+      expect(screen.getByTestId('window-controls')).toBeInTheDocument();
+      expect(screen.getByTestId('tab-bar')).toHaveAttribute(
+        'data-orientation',
+        'vertical'
+      );
+      expect(screen.getByTestId('meatball-menu-button')).toBeInTheDocument();
+    });
+
+    it('puts the meatball menu and window controls on the TopBar with no TabBar when navigationLayout is hidden', () => {
+      restorePlatform = setPlatform('linux');
+
+      renderWithStore(<Shell />, {
+        preloadedState: buildState({ navigationLayout: 'hidden' }),
+      });
+
+      expect(screen.getByTestId('top-bar')).toBeInTheDocument();
+      expect(screen.getByTestId('downloads-indicator')).toBeInTheDocument();
+      expect(screen.getByTestId('meatball-menu-button')).toBeInTheDocument();
+      expect(screen.getByTestId('window-controls')).toBeInTheDocument();
+      expect(screen.queryByTestId('tab-bar')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'tabBar.workspaces' })
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe('downloads indicator: exactly one instance, compact in the thin TopBar', () => {
+    it('renders exactly one instance on the darwin TopBar (sidebar layout), compact', () => {
+      const restorePlatform = setPlatform('darwin');
+
+      try {
+        renderWithStore(<Shell />, {
+          preloadedState: buildState({ navigationLayout: 'sidebar' }),
+        });
+
+        const instances = screen.getAllByTestId('downloads-indicator');
+        expect(instances).toHaveLength(1);
+        expect(instances[0]).toHaveAttribute('data-compact', 'true');
+      } finally {
+        restorePlatform();
+      }
+    });
+
+    it('renders exactly one instance on the darwin TopBar (hidden layout), compact', () => {
+      const restorePlatform = setPlatform('darwin');
+
+      try {
+        renderWithStore(<Shell />, {
+          preloadedState: buildState({ navigationLayout: 'hidden' }),
+        });
+
+        const instances = screen.getAllByTestId('downloads-indicator');
+        expect(instances).toHaveLength(1);
+        expect(instances[0]).toHaveAttribute('data-compact', 'true');
+      } finally {
+        restorePlatform();
+      }
+    });
+
+    it('renders exactly one instance on the darwin TabBar (tabs layout), not compact', () => {
+      renderWithStore(<Shell />, {
+        preloadedState: buildState({ navigationLayout: 'tabs' }),
+      });
+
+      const instances = screen.getAllByTestId('downloads-indicator');
+      expect(instances).toHaveLength(1);
+      expect(instances[0]).toHaveAttribute('data-compact', 'false');
+    });
+
+    it('renders exactly one instance on the win32 TopBar leading slot, compact', () => {
+      const restorePlatform = setPlatform('win32');
+
+      try {
+        renderWithStore(<Shell />, {
+          preloadedState: buildState({ navigationLayout: 'sidebar' }),
+        });
+
+        const instances = screen.getAllByTestId('downloads-indicator');
+        expect(instances).toHaveLength(1);
+        expect(instances[0]).toHaveAttribute('data-compact', 'true');
+      } finally {
+        restorePlatform();
+      }
+    });
+
+    it('renders exactly one instance on the win32 TabBar (tabs layout), not compact', () => {
+      const restorePlatform = setPlatform('win32');
+
+      try {
+        renderWithStore(<Shell />, {
+          preloadedState: buildState({ navigationLayout: 'tabs' }),
+        });
+
+        const instances = screen.getAllByTestId('downloads-indicator');
+        expect(instances).toHaveLength(1);
+        expect(instances[0]).toHaveAttribute('data-compact', 'false');
+      } finally {
+        restorePlatform();
+      }
+    });
+
+    it('still renders exactly one instance regardless of developer mode', () => {
+      // Shell's non-tabs TopBar branches are gated on darwin/win32 only (a
+      // pre-existing platform split, unrelated to developer mode) — pin the
+      // platform like every sibling test in this block so the assertion
+      // doesn't depend on the CI runner's actual process.platform (this test
+      // is about developer mode, not platform).
+      const restorePlatform = setPlatform('darwin');
+
+      try {
+        renderWithStore(<Shell />, {
+          preloadedState: buildState({
+            navigationLayout: 'sidebar',
+            isDeveloperModeEnabled: true,
+          }),
+        });
+
+        const instances = screen.getAllByTestId('downloads-indicator');
+        expect(instances).toHaveLength(1);
+      } finally {
+        restorePlatform();
+      }
     });
   });
 });

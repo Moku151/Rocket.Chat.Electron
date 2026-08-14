@@ -80,19 +80,12 @@
       "announcement": "Megosztandó képernyő kiválasztása"
     },
     "update": {
-      "title": "Frissítés érhető el",
       "announcement": "Új frissítés érhető el",
       "message": "Elérhető a Rocket.Chat asztali alkalmazás új verziója!",
-      "currentVersion": "Jelenlegi verzió:",
-      "newVersion": "Új verzió:",
+      "currentVersion": "Jelenlegi verzió",
+      "newVersion": "Új verzió",
       "install": "Frissítés telepítése",
-      "remindLater": "Emlékeztessen később",
       "skip": "A verzió kihagyása"
-    },
-    "updateDownloading": {
-      "title": "Frissítés letöltése",
-      "message": "Értesítést fog kapni, ha a frissítés készen áll a telepítésre",
-      "ok": "Rendben"
     },
     "updateInstallLater": {
       "title": "Telepítés később",
@@ -253,6 +246,10 @@
         "description": "Villogtatja az ablakot, hogy felhívja a felhasználó figyelmét.",
         "onLinux": "Egyes Linux disztribúciók nem támogatják ezt a funkciót.",
         "descriptionDarwin": "Pattogtatja az alkalmazás ikonját a dokkban, hogy felhívja a felhasználó figyelmét."
+      },
+      "downloadsPercentage": {
+        "title": "Letöltés százaléka",
+        "description": "A letöltés előrehaladási százalékának megjelenítése a lapok sávján."
       },
       "hardwareAcceleration": {
         "title": "Hardveres gyorsítás",
@@ -443,6 +440,44 @@
       "userNotLoggedIn": "Nincs bejelentkezve",
       "addWorkspace": "Munkaterület hozzáadása ({{shortcut}}+N)",
       "settingsMenu": "Az alkalmazás személyre szabása és vezérlése"
+    }
+  },
+  "tabBar": {
+    "workspaces": "Munkaterületek",
+    "addWorkspace": "Munkaterület hozzáadása",
+    "unreadMessage_one": "{{- count}} üzenet",
+    "unreadMessage_other": "{{- count}} üzenet",
+    "unreadMessages": "Olvasatlan üzenetek",
+    "meatballMenu": "Alkalmazásmenü",
+    "update": {
+      "available": "Frissítés",
+      "updating": "Frissítés…",
+      "percent": "{{- percent}}%",
+      "restart": "Újraindítás a frissítéshez",
+      "tooltip": "Az asztali alkalmazás új verziója érhető el, kattintson a részletekért",
+      "checking": "Frissítések keresése…",
+      "upToDate": "Az alkalmazás naprakész",
+      "upToDateTooltip": "A(z) {{- version}} a legújabb verzió",
+      "checkFailed": "A frissítések keresése nem sikerült"
+    },
+    "windowControls": {
+      "minimize": "Kis méret",
+      "maximize": "Teljes méret",
+      "restore": "Visszaállítás",
+      "close": "Bezárás"
+    },
+    "downloads": {
+      "tooltip": "Fájlok letöltése, kattintson a részletekhez",
+      "title": "Letöltések",
+      "showAll": "Összes letöltés megjelenítése",
+      "pause": "Szünet",
+      "resume": "Folytatás",
+      "cancel": "Mégse",
+      "showInFolder": "Megjelenítés mappában",
+      "percent": "{{- percent}}%",
+      "canceled": "Megszakítva",
+      "failed": "Sikertelen",
+      "dismiss": "Bezárás"
     }
   },
   "touchBar": {

@@ -51,19 +51,12 @@
       "announcement": "选择要分享的画面"
     },
     "update": {
-      "title": "可用的更新",
       "announcement": "有新的更新程序",
       "message": "有新版本的 Rocket.Chat 桌面应用程序！",
-      "currentVersion": "目前版本:",
-      "newVersion": "最新版本:",
+      "currentVersion": "目前版本",
+      "newVersion": "最新版本",
       "install": "安裝更新",
-      "remindLater": "稍后再提醒我",
       "skip": "忽略这个版本"
-    },
-    "updateDownloading": {
-      "title": "正在下载更新",
-      "message": "当准备好可以安装更新程序的时候，您将会收到通知。",
-      "ok": "好"
     },
     "updateInstallLater": {
       "title": "稍后再安裝",
@@ -164,6 +157,10 @@
         "title": "允许闪屏",
         "description": "使用闪屏来吸引用户的注意。",
         "onLinux": "在一些Linux系统上这个功能不可用。"
+      },
+      "downloadsPercentage": {
+        "title": "下载百分比",
+        "description": "在选项卡栏中显示下载进度百分比。"
       },
       "internalVideoChatWindow": {
         "title": "在程序窗口中打开视频通话",
@@ -266,6 +263,43 @@
       "openDevTools": "开启开发工具",
       "clearCache": "清除缓存",
       "clearStorageData": "清除存储数据"
+    }
+  },
+  "tabBar": {
+    "workspaces": "工作区",
+    "addWorkspace": "添加工作区",
+    "unreadMessage_other": "{{- count}} 条消息",
+    "unreadMessages": "未读消息",
+    "meatballMenu": "应用程序菜单",
+    "update": {
+      "available": "更新",
+      "updating": "正在更新…",
+      "percent": "{{- percent}}%",
+      "restart": "重启以更新",
+      "tooltip": "桌面应用有新版本可用，点击查看详情",
+      "checking": "正在检查更新…",
+      "upToDate": "已是最新版本",
+      "upToDateTooltip": "{{- version}} 已是最新版本",
+      "checkFailed": "无法检查更新"
+    },
+    "windowControls": {
+      "minimize": "最小化",
+      "maximize": "最大化",
+      "restore": "还原",
+      "close": "关闭"
+    },
+    "downloads": {
+      "tooltip": "正在下载文件，点击查看详情",
+      "title": "下载",
+      "showAll": "显示所有下载",
+      "pause": "暂停",
+      "resume": "继续",
+      "cancel": "取消",
+      "showInFolder": "在文件夹中显示",
+      "percent": "{{- percent}}%",
+      "canceled": "已取消",
+      "failed": "失败",
+      "dismiss": "关闭"
     }
   },
   "touchBar": {

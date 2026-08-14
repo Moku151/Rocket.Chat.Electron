@@ -12,15 +12,24 @@ import {
   watchAndPersistChanges,
 } from './app/main/data';
 import { setUserDataDirectory } from './app/main/dev';
+import { flushPersistedValues } from './app/main/persistence';
 import { startBrowserHandler } from './browser/ipc';
 import { setupDeepLinks, processDeepLinksInArgs } from './deepLinks/main';
 import { startDocumentViewerHandler } from './documentViewer/ipc';
+import { startDocumentViewerWindowHandler } from './documentViewerWindow/ipc';
 import { setupDownloads } from './downloads/main';
 import { setupElectronDlWithTracking } from './downloads/main/setup';
+import {
+  restoreDownloadsWindow,
+  startDownloadsWindowHandler,
+} from './downloadsWindow/ipc';
 import { setupMainErrorHandling } from './errors';
 import i18n from './i18n/main';
 import { handleJitsiDesktopCapturerGetSources } from './jitsi/ipc';
-import { startLogViewerWindowHandler } from './logViewerWindow/ipc';
+import {
+  restoreLogViewerWindow,
+  startLogViewerWindowHandler,
+} from './logViewerWindow/ipc';
 import {
   logger,
   setupWebContentsLogging,
@@ -38,12 +47,17 @@ import { setupOutlookLogger } from './outlookCalendar/logger';
 import { handleDesktopCapturerGetSources } from './screenSharing/desktopCapturerCache';
 import { setupScreenSharing } from './screenSharing/main';
 import { startServerViewScreenSharingHandler } from './screenSharing/serverViewScreenSharing';
+import { setupBootWatchdog } from './servers/bootWatchdog';
 import {
   handleClearCacheDialog,
   handleUserLoggedOutDataClearing,
 } from './servers/cache';
 import { setupServers } from './servers/main';
 import { checkSupportedVersionServers } from './servers/supportedVersions/main';
+import {
+  restoreSettingsWindow,
+  startSettingsWindowHandler,
+} from './settingsWindow/ipc';
 import { setupSpellChecking } from './spellChecking/main';
 import { createMainReduxStore } from './store';
 import { applySystemCertificates } from './systemCertificates';
@@ -62,6 +76,7 @@ import {
   exportLocalStorage,
   watchMachineTheme,
 } from './ui/main/rootWindow';
+import { startSecondaryWindowControlsHandler } from './ui/main/secondaryWindowControls';
 import { attachGuestWebContentsEvents } from './ui/main/serverView';
 import touchBar from './ui/main/touchBar';
 import trayIcon from './ui/main/trayIcon';
@@ -91,6 +106,10 @@ const start = async (): Promise<void> => {
   cleanupOldLogs();
 
   createMainReduxStore();
+
+  // Must be listening before any server view can boot and dispatch
+  // WEBVIEW_SERVER_VERSION_UPDATED — listen() does not replay actions.
+  setupBootWatchdog();
 
   setupOutlookLogger();
   setupDebugLoggingWatch();
@@ -125,7 +144,11 @@ const start = async (): Promise<void> => {
   setupScreenSharing();
   startServerViewScreenSharingHandler();
   startVideoCallWindowHandler();
+  startSecondaryWindowControlsHandler();
+  startDocumentViewerWindowHandler();
   startLogViewerWindowHandler();
+  startDownloadsWindowHandler();
+  startSettingsWindowHandler();
 
   await setupSpellChecking();
 
@@ -152,6 +175,7 @@ const start = async (): Promise<void> => {
     attentionDrawing.tearDown();
     stopOutlookCalendarSync();
     cleanupVideoCallResources();
+    flushPersistedValues();
   });
 
   watchAndPersistChanges();
@@ -162,6 +186,10 @@ const start = async (): Promise<void> => {
   startDocumentViewerHandler();
   startBrowserHandler();
   checkSupportedVersionServers();
+
+  await restoreLogViewerWindow();
+  await restoreDownloadsWindow();
+  await restoreSettingsWindow();
 
   await processDeepLinksInArgs();
 

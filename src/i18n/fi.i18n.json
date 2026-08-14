@@ -71,19 +71,12 @@
       "announcement": "Valitse jaettava näyttö"
     },
     "update": {
-      "title": "Päivitys saatavilla",
       "announcement": "Uusi päivitys on saatavilla",
       "message": "Rocket.Chat-tietokonesovelluksen uusi versio on saatavilla!",
-      "currentVersion": "Nykyinen versio:",
-      "newVersion": "Uusi versio:",
+      "currentVersion": "Nykyinen versio",
+      "newVersion": "Uusi versio",
       "install": "Asenna päivitys",
-      "remindLater": "Muistuta myöhemmin",
       "skip": "Ohita tämä versio"
-    },
-    "updateDownloading": {
-      "title": "Ladataan päivitystä",
-      "message": "Saat ilmoituksen, kun päivitys on valmis asennettavaksi",
-      "ok": "OK"
     },
     "updateInstallLater": {
       "title": "Asennetaan myöhemmin",
@@ -228,6 +221,10 @@
         "description": "Herättää käyttäjän huomion väläyttämällä ikkunaa.",
         "onLinux": "Jotkin Linux-jakelut eivät tue tätä ominaisuutta.",
         "descriptionDarwin": "Herättää käyttäjän huomion ponnauttamalla sovelluskuvaketta Dockissa."
+      },
+      "downloadsPercentage": {
+        "title": "Latauksen prosenttiosuus",
+        "description": "Näytä latauksen etenemisprosentti välilehtien palkissa."
       },
       "hardwareAcceleration": {
         "title": "Laitteistokiihdytys",
@@ -377,6 +374,44 @@
       "openDevTools": "Avaa DevTools",
       "clearCache": "Tyhjennä välimuisti",
       "clearStorageData": "Tyhjennä tallennustiedot"
+    }
+  },
+  "tabBar": {
+    "workspaces": "Työtilat",
+    "addWorkspace": "Lisää työtila",
+    "unreadMessage_one": "{{- count}} viesti",
+    "unreadMessage_other": "{{- count}} viestiä",
+    "unreadMessages": "Lukemattomat viestit",
+    "meatballMenu": "Sovellusvalikko",
+    "update": {
+      "available": "Päivitys",
+      "updating": "Päivitetään…",
+      "percent": "{{- percent}}%",
+      "restart": "Käynnistä uudelleen päivittääksesi",
+      "tooltip": "Uusi työpöytäsovelluksen versio on saatavilla, katso lisätiedot napsauttamalla",
+      "checking": "Tarkistetaan päivityksiä…",
+      "upToDate": "Sovellus on ajan tasalla",
+      "upToDateTooltip": "{{- version}} on uusin versio",
+      "checkFailed": "Päivitysten tarkistus epäonnistui"
+    },
+    "windowControls": {
+      "minimize": "Pienennä",
+      "maximize": "Suurenna",
+      "restore": "Palauta",
+      "close": "Sulje"
+    },
+    "downloads": {
+      "tooltip": "Tiedostoja ladataan, napsauta nähdäksesi tiedot",
+      "title": "Lataukset",
+      "showAll": "Näytä kaikki lataukset",
+      "pause": "Keskeytä",
+      "resume": "Jatka",
+      "cancel": "Peruuta",
+      "showInFolder": "Näytä kansiossa",
+      "percent": "{{- percent}}%",
+      "canceled": "Peruutettu",
+      "failed": "Epäonnistui",
+      "dismiss": "Sulje"
     }
   },
   "touchBar": {

@@ -50,19 +50,12 @@
       "announcement": "Paylaşılacak ekran seçin"
     },
     "update": {
-      "title": "Güncelleme kullanılabilir",
       "announcement": "Yeni bir sürüm kullanılabilir",
       "message": "Rocket.Chat için yeni bir masaüstü sürümü mevcut!",
-      "currentVersion": "Mevcut versiyon:",
-      "newVersion": "Yeni versiyon:",
+      "currentVersion": "Mevcut versiyon",
+      "newVersion": "Yeni versiyon",
       "install": "Güncellemeyi yükle",
-      "remindLater": "Daha sonra hatırlat",
       "skip": "Bu sürümü atla"
-    },
-    "updateDownloading": {
-      "title": "Güncelleme indiriliyor",
-      "message": "Güncelleme yüklenmeye hazır olduğunda size bildirilecek.",
-      "ok": "TAMAM"
     },
     "updateInstallLater": {
       "title": "Installing Later",
@@ -229,6 +222,44 @@
       "reload": "Sunucuyu yeniden yükle",
       "remove": "Sunucuyu sil",
       "openDevTools": "DevTools aç"
+    }
+  },
+  "tabBar": {
+    "workspaces": "Çalışma alanları",
+    "addWorkspace": "Çalışma alanı ekle",
+    "unreadMessage_one": "{{- count}} mesaj",
+    "unreadMessage_other": "{{- count}} mesaj",
+    "unreadMessages": "Okunmamış mesajlar",
+    "meatballMenu": "Uygulama menüsü",
+    "update": {
+      "available": "Güncelleme",
+      "updating": "Güncelleniyor…",
+      "percent": "{{- percent}}%",
+      "restart": "Güncellemek için yeniden başlat",
+      "tooltip": "Masaüstü uygulamasının yeni bir sürümü mevcut, ayrıntılar için tıklayın",
+      "checking": "Güncellemeler denetleniyor…",
+      "upToDate": "Uygulamanız güncel",
+      "upToDateTooltip": "{{- version}} en son sürümdür",
+      "checkFailed": "Güncellemeler denetlenemedi"
+    },
+    "windowControls": {
+      "minimize": "Simge durumuna küçült",
+      "maximize": "Ekranı kapla",
+      "restore": "Geri yükle",
+      "close": "Kapat"
+    },
+    "downloads": {
+      "tooltip": "Dosyalar indiriliyor, ayrıntılar için tıklayın",
+      "title": "İndirmeler",
+      "showAll": "Tüm indirmeleri göster",
+      "pause": "Duraklat",
+      "resume": "Devam Et",
+      "cancel": "İptal",
+      "showInFolder": "Klasörde göster",
+      "percent": "{{- percent}}%",
+      "canceled": "İptal",
+      "failed": "Başarısız",
+      "dismiss": "Kapat"
     }
   },
   "touchBar": {

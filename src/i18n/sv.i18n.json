@@ -80,19 +80,12 @@
       "announcement": "Välj en skärm att dela"
     },
     "update": {
-      "title": "Uppdatering finns tillgänglig",
       "announcement": "En ny uppdatering finns tillgänglig",
       "message": "En ny version av Rocket.Chat Desktop App är tillgänglig!",
-      "currentVersion": "Nuvarande version:",
-      "newVersion": "Ny version:",
+      "currentVersion": "Nuvarande version",
+      "newVersion": "Ny version",
       "install": "Installera uppdatering",
-      "remindLater": "Påminn mig senare",
       "skip": "Hoppa över denna version"
-    },
-    "updateDownloading": {
-      "title": "Nedladdning av uppdatering",
-      "message": "Du kommer att få ett meddelande när uppdateringen är klar att installeras",
-      "ok": "OK"
     },
     "updateInstallLater": {
       "title": "Installera senare",
@@ -249,6 +242,10 @@
         "description": "Blinkar fönstret för att dra till sig användarens uppmärksamhet.",
         "onLinux": "Vissa Linux-distributioner har inte stöd för den här funktionen.",
         "descriptionDarwin": "Appikonen studsar i dockan för att dra till sig användarens uppmärksamhet."
+      },
+      "downloadsPercentage": {
+        "title": "Nedladdningsprocent",
+        "description": "Visa nedladdningsförloppsandelen i fliken."
       },
       "hardwareAcceleration": {
         "title": "Hårdvaruacceleration",
@@ -434,6 +431,44 @@
       "userNotLoggedIn": "Inte inloggad",
       "addWorkspace": "Lägg till arbetsyta ({{shortcut}}+N)",
       "settingsMenu": "Anpassa och kontrollera appen"
+    }
+  },
+  "tabBar": {
+    "workspaces": "Arbetsytor",
+    "addWorkspace": "Lägg till arbetsyta",
+    "unreadMessage_one": "{{- count}} meddelande",
+    "unreadMessage_other": "{{- count}} meddelanden",
+    "unreadMessages": "Olästa meddelanden",
+    "meatballMenu": "Programmeny",
+    "update": {
+      "available": "Uppdatering",
+      "updating": "Uppdaterar…",
+      "percent": "{{- percent}}%",
+      "restart": "Starta om för att uppdatera",
+      "tooltip": "En ny version av skrivbordsappen är tillgänglig, klicka för mer information",
+      "checking": "Söker efter uppdateringar…",
+      "upToDate": "Du är uppdaterad",
+      "upToDateTooltip": "{{- version}} är den senaste versionen",
+      "checkFailed": "Det gick inte att söka efter uppdateringar"
+    },
+    "windowControls": {
+      "minimize": "Minimera",
+      "maximize": "Maximera",
+      "restore": "Återställ",
+      "close": "Stäng"
+    },
+    "downloads": {
+      "tooltip": "Laddar ned filer, klicka för detaljer",
+      "title": "Nedladdningar",
+      "showAll": "Visa alla nedladdningar",
+      "pause": "Pausa",
+      "resume": "Återuppta",
+      "cancel": "Avbryt",
+      "showInFolder": "Visa i mapp",
+      "percent": "{{- percent}}%",
+      "canceled": "Avbruten",
+      "failed": "Misslyckades",
+      "dismiss": "Stäng"
     }
   },
   "touchBar": {

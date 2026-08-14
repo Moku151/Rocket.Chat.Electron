@@ -28,3 +28,17 @@ export type UserLevelUpdateConfiguration = {
 
 export const UPDATE_CHANNELS = ['latest', 'beta', 'alpha'] as const;
 export type UpdateChannel = (typeof UPDATE_CHANNELS)[number];
+
+/**
+ * Download phase of an available update, driving the titlebar update label:
+ * `idle` (available, not downloading yet) → `downloading` → `downloaded`.
+ */
+export type UpdateDownloadStatus = 'idle' | 'downloading' | 'downloaded';
+
+/**
+ * Outcome of a user-initiated update check, driving the transient titlebar
+ * feedback label: `idle` (nothing to show) → `checking` → `upToDate` |
+ * `failed`. Startup auto-checks never dispatch the requested action, so they
+ * stay at `idle` and produce no titlebar feedback.
+ */
+export type UpdateCheckStatus = 'idle' | 'checking' | 'upToDate' | 'failed';

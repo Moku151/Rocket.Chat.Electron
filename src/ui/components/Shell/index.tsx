@@ -3,7 +3,6 @@ import { useLayoutEffect } from 'react';
 import { useSelector } from 'react-redux';
 
 import type { RootState } from '../../../store/rootReducer';
-import { AboutDialog } from '../AboutDialog';
 import { AddServerView } from '../AddServerView';
 import { ClearCacheDialog } from '../ClearCacheDialog';
 import DownloadsManagerView from '../DownloadsManagerView';
@@ -21,11 +20,18 @@ import { WindowControls } from '../TabBar/WindowControls';
 import { TelephonyDefaultHandlerPromptModal } from '../TelephonyDefaultHandlerPromptModal';
 import { TelephonyServerSelectModal } from '../TelephonyServerSelectModal';
 import { TopBar } from '../TopBar';
+import { DownloadsIndicator } from '../TopBar/DownloadsIndicator';
 import { ServerSwitcher } from '../TopBar/ServerSwitcher';
-import { UpdateDialog } from '../UpdateDialog';
+import { UpdateLabel } from '../TopBar/UpdateLabel';
 import { useShellTheme } from '../hooks/useShellTheme';
 import TooltipProvider from '../utils/TooltipProvider';
-import { GlobalStyles, WindowDragBar } from './styles';
+import {
+  CLIENT_CHROME_CORNER_RADIUS_PX,
+  GlobalStyles,
+  WindowDragBar,
+} from './styles';
+
+const usesLinuxClientChromeRounding = process.platform === 'linux';
 
 export const Shell = () => {
   const appPath = useSelector(({ appPath }: RootState) => appPath);
@@ -34,6 +40,10 @@ export const Shell = () => {
   );
   const navigationLayout = useSelector(
     ({ navigationLayout }: RootState) => navigationLayout
+  );
+  const isWindowExpanded = useSelector(
+    ({ rootWindowState }: RootState) =>
+      rootWindowState.maximized || rootWindowState.fullscreen
   );
 
   const shellTheme = useShellTheme();
@@ -67,40 +77,85 @@ export const Shell = () => {
       <Box
         bg={isTransparentWindowEnabled ? 'transparent' : 'surface-neutral'}
         display='flex'
-        flexWrap='wrap'
-        height='100vh'
+        flexWrap='nowrap'
+        height='100%'
+        width='100%'
+        maxWidth='100%'
         flexDirection='column'
+        style={
+          usesLinuxClientChromeRounding
+            ? {
+                // Soft outer corners on Linux only; drop when maximized.
+                borderRadius: isWindowExpanded
+                  ? 0
+                  : CLIENT_CHROME_CORNER_RADIUS_PX,
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+                // Inset hairline stays inside the box (outer box-shadow was
+                // adding ~1px and caused a horizontal scrollbar on Linux).
+                boxShadow: isWindowExpanded
+                  ? undefined
+                  : 'inset 0 0 0 1px var(--rcx-color-shadow-elevation-border)',
+              }
+            : undefined
+        }
       >
-        {navigationLayout === 'tabs' && process.platform === 'win32' && (
+        {/* Windows + Linux: client-side window chrome (min/max/close in-strip). */}
+        {navigationLayout === 'tabs' &&
+          (process.platform === 'win32' || process.platform === 'linux') && (
+            <TabBar
+              leadingSlot={
+                <>
+                  <MeatballMenuButton />
+                  <UpdateLabel />
+                  <DownloadsIndicator />
+                </>
+              }
+              trailingSlot={<WindowControls />}
+            />
+          )}
+        {/* macOS tabs: system traffic lights; meatball/downloads/update trail. */}
+        {navigationLayout === 'tabs' && process.platform === 'darwin' && (
           <TabBar
-            leadingSlot={<MeatballMenuButton />}
-            trailingSlot={<WindowControls />}
+            trailingSlot={
+              <>
+                <UpdateLabel />
+                <DownloadsIndicator />
+                <MeatballMenuButton />
+              </>
+            }
           />
-        )}
-        {navigationLayout === 'tabs' && process.platform !== 'win32' && (
-          <TabBar trailingSlot={<MeatballMenuButton />} />
         )}
         {navigationLayout !== 'tabs' && process.platform === 'darwin' && (
           <TopBar
             centerSlot={
               navigationLayout === 'hidden' ? <ServerSwitcher /> : undefined
             }
+            trailingSlot={
+              <>
+                <UpdateLabel />
+                <DownloadsIndicator compact />
+              </>
+            }
           />
         )}
-        {navigationLayout !== 'tabs' && process.platform === 'win32' && (
-          <TopBar
-            leadingSlot={
-              navigationLayout === 'hidden' ? (
-                <MeatballMenuButton tiny />
-              ) : undefined
-            }
-            centerSlot={
-              navigationLayout === 'hidden' ? <ServerSwitcher /> : undefined
-            }
-            trailingSlot={<WindowControls />}
-            textAlignment='left'
-          />
-        )}
+        {navigationLayout !== 'tabs' &&
+          (process.platform === 'win32' || process.platform === 'linux') && (
+            <TopBar
+              leadingSlot={
+                <>
+                  {navigationLayout === 'hidden' && <MeatballMenuButton tiny />}
+                  <UpdateLabel />
+                  <DownloadsIndicator compact />
+                </>
+              }
+              centerSlot={
+                navigationLayout === 'hidden' ? <ServerSwitcher /> : undefined
+              }
+              trailingSlot={<WindowControls />}
+              textAlignment='left'
+            />
+          )}
         <Box display='flex' flexDirection='row' flexGrow={1}>
           {navigationLayout === 'sidebar' && (
             <TabBar
@@ -133,13 +188,11 @@ export const Shell = () => {
           </Box>
         </Box>
       </Box>
-      <AboutDialog />
       <ServerInfoModal />
       <SupportedVersionDialog />
       <ScreenSharingDialog />
       <RootScreenSharePicker />
       <SelectClientCertificateDialog />
-      <UpdateDialog />
       <ClearCacheDialog />
       <OutlookCredentialsDialog />
       <TelephonyServerSelectModal />

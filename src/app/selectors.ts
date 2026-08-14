@@ -38,6 +38,8 @@ const selectPersistableValuesA = createStructuredSelector({
   isReportEnabled: ({ isReportEnabled }: RootState) => isReportEnabled,
   isFlashFrameEnabled: ({ isFlashFrameEnabled }: RootState) =>
     isFlashFrameEnabled,
+  isDownloadsPercentageEnabled: ({ isDownloadsPercentageEnabled }: RootState) =>
+    isDownloadsPercentageEnabled,
   isInternalVideoChatWindowEnabled: ({
     isInternalVideoChatWindowEnabled,
   }: RootState) => isInternalVideoChatWindowEnabled,
@@ -97,6 +99,14 @@ const selectPersistableValuesB = createStructuredSelector({
     telephonyGlobalShortcutConfig,
   }: RootState) => telephonyGlobalShortcutConfig,
   isTelephonyEnabled: ({ isTelephonyEnabled }: RootState) => isTelephonyEnabled,
+  isLogViewerWindowOpen: ({ isLogViewerWindowOpen }: RootState) =>
+    isLogViewerWindowOpen,
+  isDownloadsWindowOpen: ({ isDownloadsWindowOpen }: RootState) =>
+    isDownloadsWindowOpen,
+  isSettingsWindowOpen: ({ isSettingsWindowOpen }: RootState) =>
+    isSettingsWindowOpen,
+  secondaryWindowStates: ({ secondaryWindowStates }: RootState) =>
+    secondaryWindowStates,
 });
 
 export const selectPersistableValues = createSelector(
